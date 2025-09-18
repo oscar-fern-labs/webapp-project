@@ -2,9 +2,12 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 
 function App() {
+  // State variables
   const [items, setItems] = useState([]);
   const [newItem, setNewItem] = useState({ id: '', name: '' });
   const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
 
   // Load items from backend
   const fetchItems = () => {
@@ -24,6 +27,7 @@ function App() {
     fetchItems();
   }, []);
 
+  // Add new item
   const handleAdd = (e) => {
     e.preventDefault();
     if (!newItem.id) return alert('ID required');
@@ -43,6 +47,33 @@ function App() {
       .catch(err => alert(err.message));
   };
 
+  // Edit handling
+  const handleEdit = (id) => {
+    const item = items.find(i => i.id === id);
+    setEditName(item?.name || '');
+    setEditingId(id);
+  };
+
+  const handleUpdate = (id) => {
+    if (!editName) return alert('Name required for update');
+    fetch(`/api/items/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: editName }),
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Update failed');
+        return res.json();
+      })
+      .then(() => {
+        setEditingId(null);
+        setEditName('');
+        fetchItems();
+      })
+      .catch(err => alert(err.message));
+  };
+
+  // Delete item
   const handleDelete = (id) => {
     fetch(`/api/items/${id}`, { method: 'DELETE' })
       .then(() => fetchItems())
@@ -59,9 +90,24 @@ function App() {
           {items.map(item => (
             <li key={item.id} style={{ marginBottom: '0.5rem' }}>
               <strong>{item.id}</strong>: {item.name || '(no name)'}
-              <button onClick={() => handleDelete(item.id)} style={{ marginLeft: '1rem' }}>
-                Delete
-              </button>
+              {editingId === item.id ? (
+                <span>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    placeholder="New name"
+                    style={{ marginLeft: '0.5rem' }}
+                  />
+                  <button onClick={() => handleUpdate(item.id)} style={{ marginLeft: '0.5rem' }}>Save</button>
+                  <button onClick={() => setEditingId(null)} style={{ marginLeft: '0.5rem' }}>Cancel</button>
+                </span>
+              ) : (
+                <>
+                  <button onClick={() => handleEdit(item.id)} style={{ marginLeft: '0.5rem' }}>Edit</button>
+                  <button onClick={() => handleDelete(item.id)} style={{ marginLeft: '0.5rem' }}>Delete</button>
+                </>
+              )}
             </li>
           ))}
         </ul>
@@ -91,3 +137,4 @@ function App() {
 }
 
 export default App;
+
