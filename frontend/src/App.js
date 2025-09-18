@@ -2,42 +2,114 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 
 function App() {
-  // State variables
+  // Auth state
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+
+  // Item state
   const [items, setItems] = useState([]);
-  const [newItem, setNewItem] = useState({ id: '', name: '' });
   const [loading, setLoading] = useState(true);
+  const [newItem, setNewItem] = useState({ id: '', name: '' });
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
 
-  // Load items from backend
+  // Helper for authenticated fetch
+  const authFetch = (url, options = {}) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return fetch(url, { ...options, headers });
+  };
+
+  // Load items (requires auth)
   const fetchItems = () => {
-    fetch('/api/items')
-      .then(res => res.json())
+    authFetch('/api/items')
+      .then(res => {
+        if (!res.ok) throw new Error('Unauthenticated');
+        return res.json();
+      })
       .then(data => {
         setItems(data);
         setLoading(false);
       })
       .catch(err => {
-        console.error('Error loading items', err);
+        console.error(err);
         setLoading(false);
       });
   };
 
   useEffect(() => {
-    fetchItems();
-  }, []);
+    if (token) {
+      fetchItems();
+    } else {
+      setLoading(false);
+    }
+  }, [token]);
 
-  // Add new item
+  // Auth handlers
+  const handleLogin = (e) => {
+    e.preventDefault();
+    fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Login failed');
+        return res.json();
+      })
+      .then(data => {
+        setToken(data.token);
+        localStorage.setItem('token', data.token);
+        setAuthError('');
+        setUsername('');
+        setPassword('');
+        fetchItems();
+      })
+      .catch(err => setAuthError(err.message));
+  };
+
+  const handleRegister = (e) => {
+    e.preventDefault();
+    fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Registration failed');
+        return res.json();
+      })
+      .then(() => {
+        setAuthError('');
+        // Auto login after registration
+        handleLogin(e);
+      })
+      .catch(err => setAuthError(err.message));
+  };
+
+  const handleLogout = () => {
+    setToken('');
+    localStorage.removeItem('token');
+    setItems([]);
+  };
+
+  // CRUD handlers (authenticated)
   const handleAdd = (e) => {
     e.preventDefault();
     if (!newItem.id) return alert('ID required');
-    fetch('/api/items', {
+    authFetch('/api/items', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newItem),
     })
       .then(res => {
-        if (!res.ok) throw new Error('Failed to add');
+        if (!res.ok) throw new Error('Add failed');
         return res.json();
       })
       .then(() => {
@@ -47,7 +119,6 @@ function App() {
       .catch(err => alert(err.message));
   };
 
-  // Edit handling
   const handleEdit = (id) => {
     const item = items.find(i => i.id === id);
     setEditName(item?.name || '');
@@ -56,9 +127,8 @@ function App() {
 
   const handleUpdate = (id) => {
     if (!editName) return alert('Name required for update');
-    fetch(`/api/items/${id}`, {
+    authFetch(`/api/items/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: editName }),
     })
       .then(res => {
@@ -73,16 +143,48 @@ function App() {
       .catch(err => alert(err.message));
   };
 
-  // Delete item
   const handleDelete = (id) => {
-    fetch(`/api/items/${id}`, { method: 'DELETE' })
+    authFetch(`/api/items/${id}`, { method: 'DELETE' })
       .then(() => fetchItems())
       .catch(err => console.error(err));
   };
 
+  // Render UI
+  if (!token) {
+    return (
+      <div className="App" style={{ padding: '2rem', fontFamily: 'Arial, sans-serif' }}>
+        <h2>Login / Register</h2>
+        {authError && <p style={{ color: 'red' }}>{authError}</p>}
+        <form onSubmit={handleLogin} style={{ marginBottom: '1rem' }}>
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            required
+            style={{ marginRight: '0.5rem' }}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            style={{ marginRight: '0.5rem' }}
+          />
+          <button type="submit">Login</button>
+        </form>
+        <form onSubmit={handleRegister}>
+          <button type="submit">Register new account</button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div className="App" style={{ padding: '2rem', fontFamily: 'Arial, sans-serif' }}>
       <h1>Item List</h1>
+      <button onClick={handleLogout} style={{ marginBottom: '1rem' }}>Logout</button>
       {loading ? (
         <p>Loading...</p>
       ) : (
