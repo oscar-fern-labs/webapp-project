@@ -1,0 +1,1 @@
+{"name": "webapp-backend", "version": "1.0.0", "description": "Backend for webapp-project", "main": "index.js", "scripts": {"start": "node index.js", "dev": "nodemon index.js"}, "author": "", "license": "MIT", "dependencies": {"express": "^4.18.2", "dotenv": "^16.3.1", "cors": "^2.8.5"}, "devDependencies": {"nodemon": "^3.0.3"}}
